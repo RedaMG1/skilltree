@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Roadmap DevOps</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Balsamiq+Sans:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --topic: #fdff00;
+    --sub: #ffe599;
+    --blue: #2b78e4;
+    --purple: #874efe;
+    --green: #667113;
+    --grey: #949494;
+    --done: #cbcbcb;
+    --learning: #dad1fd;
+    --skipped: #496b69;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: #f8fafc; color: #000;
+    font-family: "Balsamiq Sans", "Comic Sans MS", sans-serif;
+  }
+
+  /* barre du haut */
+  .bar {
+    position: sticky; top: 0; z-index: 5; background: #fff; border-bottom: 1px solid #e2e8f0;
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 10px 16px; font-family: system-ui, "Segoe UI", sans-serif; font-size: 14px;
+  }
+  .bar b { background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 6px; }
+  .bar button { border: 1px solid #e2e8f0; background: #fff; border-radius: 6px; padding: 4px 10px; cursor: pointer; font: inherit; }
+  .bar .reset { margin-left: auto; }
+  .hint { color: #64748b; font-size: 12px; }
+
+  /* roadmap */
+  .wrap { max-width: 980px; margin: 0 auto; padding: 24px 16px 80px; }
+  #map { position: relative; }
+  #lines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+
+  .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 30px; }
+  .legend { border: 2.7px solid #000; border-radius: 5px; background: #fff; padding: 10px 14px; font-size: 14px; line-height: 1.9; }
+  .legend div { display: flex; align-items: center; gap: 8px; }
+  .legend .badge { position: static; transform: none; }
+  .title { flex: 1; text-align: center; font-size: 30px; font-weight: 700; padding-top: 50px; position: relative; }
+
+  .section {
+    display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+    gap: 0 70px; margin-bottom: 54px; position: relative;
+  }
+  .topic-col { display: flex; justify-content: center; }
+  .subs { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: flex-start; align-content: center; }
+  .side-left .subs, .side-left .group { grid-column: 1; grid-row: 1; justify-content: flex-end; }
+  .side-right .subs, .side-right .group { grid-column: 3; grid-row: 1; justify-content: flex-start; }
+  .topic-col { grid-column: 2; grid-row: 1; }
+  .group { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 6px; }
+  .group-label { flex-basis: 100%; font-size: 15px; margin-bottom: -2px; }
+  .side-left .group-label { text-align: right; }
+
+  .node {
+    position: relative; border: 2.7px solid #000; border-radius: 5px;
+    padding: 6px 22px 6px 14px; font-size: 15px; text-align: center;
+    cursor: pointer; user-select: none; background: var(--sub); min-width: 120px;
+  }
+  .node:hover { filter: brightness(.96); }
+  .node.topic { background: var(--topic); font-size: 16px; padding: 8px 18px; min-width: 210px; }
+  .badge {
+    position: absolute; right: -10px; top: 50%; transform: translateY(-50%);
+    width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center;
+  }
+  .badge svg { width: 10px; height: 10px; }
+  .p { background: var(--purple); } .g { background: var(--green); } .n { background: var(--grey); }
+
+  .node.done { background: var(--done) !important; text-decoration: line-through; }
+  .node.learning { background: var(--learning) !important; text-decoration: underline; }
+  .node.skipped { background: var(--skipped) !important; color: #fff; text-decoration: line-through; }
+
+  .end { text-align: center; }
+
+  @media (max-width: 760px) {
+    .section { grid-template-columns: 1fr; gap: 12px; }
+    .topic-col, .side-left .subs, .side-right .subs { grid-column: 1; grid-row: auto; justify-content: center; }
+    #lines { display: none; }
+    .title { padding-top: 0; }
+  }
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <span><b id="pct">0% fait</b></span>
+  <span id="count">0 sur 0 faits</span>
+  <span class="hint">Clic = fait · Maj+clic = en cours · Alt+clic = passer</span>
+  <button class="reset" id="reset">Réinitialiser</button>
+</div>
+
+<div class="wrap">
+  <div id="map">
+    <svg id="lines"></svg>
+    <div class="head">
+      <div class="legend" id="legend"></div>
+      <div class="title" id="title">DevOps</div>
+      <div style="width:180px"></div>
+    </div>
+    <div id="sections"></div>
+    <div class="end"><span class="node topic" id="end" style="display:inline-block;cursor:default">Continue d'apprendre 🚀</span></div>
+  </div>
+</div>
+
+<script>
+// p = violet, g = vert, n = gris, rien = pas de badge
+// "#Titre" démarre un petit groupe avec un titre.
+const VIEWS = {
+  mine: {
+    title: "Mes skills DevOps",
+    legend: [["p", "Demandé pour le poste"], ["n", "À explorer / recherche"]],
+    roadmap: [
+      ["Langages & scripting", ["Bash:p", "Python:p", "YAML:p", "#Architecture", "Microservices:p", "API:p", "MCP:p"]],
+      ["Systèmes", ["#Linux", "Debian:p", "Ubuntu:p", "CentOS:p", "#Windows", "Windows Server:p", "Active Directory:p", "#", "VMware:p", "Admin sys avancée:p"]],
+      ["Réseau & services", ["Firewall:p", "pfSense (à tester):n", "Serveur DNS:p", "Messagerie:p", "Analyse antispam:p", "Virtualisation:p", "Sauvegarde:p", "Centralisation des logs:p"]],
+      ["Bases de données", ["MySQL:p", "PostgreSQL:p"]],
+      ["Conteneurs & orchestration", ["Docker:p", "Kubernetes:p"]],
+      ["Cloud", ["AWS:p", "Scaleway:p", "OVH:p", "Recherche sur le cloud:n"]],
+      ["Infrastructure as Code", ["Terraform:p", "Ansible:p"]],
+      ["CI / CD", ["Jenkins:p"]],
+      ["Monitoring & logging", ["Prometheus:p", "Grafana:p", "ELK Stack:p"]],
+      ["Sécurité", ["Sécurité des applications:p", "Sécurité hosting:p", "Sécurité réseau:p", "DevSecOps (recherche):n"]],
+      ["IA & à explorer", ["Chercher les MCP:n", "Hermes Agent:n", "Reverse engineering:n", "Brevo:n"]],
+      ["Carrière", ["Bien se vendre:p", "Vendre mon expérience chez Pierburg:p", "Cas concrets pour chaque techno acquise:p"]],
+    ],
+  },
+};
+
+const KEY = "devops-roadmap-progress-v2";
+let progress = {};
+try { progress = JSON.parse(localStorage.getItem(KEY)) || {}; } catch {}
+
+const CHECK = '<svg viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 6.3l2.3 2.3 4.7-5"/></svg>';
+const sections = document.getElementById("sections");
+
+function makeNode(text, cls, badge) {
+  const el = document.createElement("div");
+  el.className = "node " + cls;
+  el.dataset.id = text.toLowerCase();
+  el.textContent = text;
+  if (badge) el.insertAdjacentHTML("beforeend", `<span class="badge ${badge}">${CHECK}</span>`);
+  return el;
+}
+
+function render() {
+  const v = VIEWS.mine;
+  document.getElementById("title").textContent = v.title;
+  document.getElementById("legend").innerHTML = v.legend.map(([c, t]) => `<div><span class="badge ${c}">${CHECK}</span>${t}</div>`).join("");
+  sections.innerHTML = "";
+  v.roadmap.forEach(([topic, subs], i) => {
+    const sec = document.createElement("div");
+    sec.className = "section " + (i % 2 ? "side-left" : "side-right");
+    const topicCol = document.createElement("div");
+    topicCol.className = "topic-col";
+    topicCol.appendChild(makeNode(topic, "topic"));
+    const box = document.createElement("div");
+    box.className = "subs";
+    let group = null;
+    subs.forEach(s => {
+      if (s.startsWith("#")) {
+        group = document.createElement("div"); group.className = "group";
+        if (s.length > 1) group.innerHTML = `<div class="group-label">${s.slice(1)}</div>`;
+        box.appendChild(group);
+        return;
+      }
+      const [name, badge] = s.split(":");
+      (group || box).appendChild(makeNode(name, "sub", badge));
+    });
+    sec.append(box, topicCol);
+    sections.appendChild(sec);
+  });
+  paint();
+}
+
+function paint() {
+  const all = document.querySelectorAll(".node[data-id]");
+  let done = 0;
+  all.forEach(n => {
+    const s = progress[n.dataset.id];
+    n.classList.toggle("done", s === "done");
+    n.classList.toggle("learning", s === "learning");
+    n.classList.toggle("skipped", s === "skipped");
+    if (s === "done") done++;
+  });
+  document.getElementById("pct").textContent = Math.round(done / all.length * 100) + "% fait";
+  document.getElementById("count").textContent = `${done} sur ${all.length} faits`;
+  drawLines();
+}
+
+document.getElementById("map").addEventListener("click", e => {
+  const n = e.target.closest(".node[data-id]");
+  if (!n) return;
+  e.preventDefault();
+  const want = e.shiftKey ? "learning" : e.altKey ? "skipped" : "done";
+  if (progress[n.dataset.id] === want) delete progress[n.dataset.id];
+  else progress[n.dataset.id] = want;
+  try { localStorage.setItem(KEY, JSON.stringify(progress)); } catch {}
+  paint();
+});
+
+document.getElementById("reset").onclick = () => {
+  if (confirm("Effacer toute ta progression ?")) { progress = {}; try { localStorage.removeItem(KEY); } catch {} paint(); }
+};
+
+// ----- lignes bleues -----
+const map = document.getElementById("map");
+const svg = document.getElementById("lines");
+function drawLines() {
+  if (innerWidth <= 760) return;
+  const box = map.getBoundingClientRect();
+  const r = el => { const b = el.getBoundingClientRect(); return { l: b.left - box.left, r: b.right - box.left, t: b.top - box.top, b: b.bottom - box.top, cx: (b.left + b.right) / 2 - box.left, cy: (b.top + b.bottom) / 2 - box.top }; };
+  const solid = d => `<path d="${d}" stroke="#2b78e4" stroke-width="3.5" fill="none"/>`;
+  const dotted = d => `<path d="${d}" stroke="#2b78e4" stroke-width="3.5" stroke-dasharray="0.8 8" stroke-linecap="round" fill="none"/>`;
+
+  const topics = [...document.querySelectorAll(".node.topic")];
+  const title = r(document.getElementById("title"));
+  let out = dotted(`M${title.cx} 0 L${title.cx} ${title.t + 40}`);
+  topics.forEach((t, i) => {
+    const a = r(t);
+    if (i === 0) out += solid(`M${title.cx} ${title.b + 6} L${a.cx} ${a.t}`);
+    if (topics[i + 1]) {
+      const b = r(topics[i + 1]);
+      out += solid(`M${a.cx} ${a.b} C${a.cx} ${(a.b + b.t) / 2}, ${b.cx} ${(a.b + b.t) / 2}, ${b.cx} ${b.t}`);
+    }
+    const sec = t.closest(".section");
+    if (!sec) return;
+    const left = sec.classList.contains("side-left");
+    sec.querySelectorAll(".node.sub").forEach(s => {
+      const c = r(s);
+      const x1 = left ? a.l : a.r, x2 = left ? c.r + (s.querySelector(".badge") ? 10 : 0) : c.l;
+      const mx = (x1 + x2) / 2;
+      out += dotted(`M${x1} ${a.cy} C${mx} ${a.cy}, ${mx} ${c.cy}, ${x2} ${c.cy}`);
+    });
+  });
+  svg.innerHTML = out;
+}
+new ResizeObserver(drawLines).observe(map);
+document.fonts && document.fonts.ready.then(drawLines);
+
+render();
+</script>
+</body>
+</html>

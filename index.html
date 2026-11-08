@@ -79,6 +79,20 @@
 
   .end { text-align: center; }
 
+  /* boutons + et × (visibles au survol) */
+  .node .add, .node .del {
+    position: absolute; top: -12px; width: 22px; height: 22px; padding: 0;
+    border: 2px solid #000; border-radius: 50%; background: #fff; color: #000;
+    font: 700 15px/1 system-ui, sans-serif; display: grid; place-items: center;
+    cursor: pointer; opacity: 0; transition: opacity .12s; z-index: 2;
+  }
+  .node .add { right: 14px; }
+  .node .del { left: -11px; }
+  .node:hover .add, .node:hover .del { opacity: 1; }
+  .node .add:hover { background: var(--blue); color: #fff; }
+  .node .del:hover { background: #e11d48; color: #fff; }
+  @media (hover: none) { .node .add, .node .del { opacity: .85; } }
+
   @media (max-width: 760px) {
     .section { grid-template-columns: 1fr; gap: 12px; }
     .topic-col, .side-left .subs, .side-right .subs { grid-column: 1; grid-row: auto; justify-content: center; }
@@ -92,7 +106,7 @@
 <div class="bar">
   <span><b id="pct">0% fait</b></span>
   <span id="count">0 sur 0 faits</span>
-  <span class="hint">Clic = fait · Maj+clic = en cours · Alt+clic = passer</span>
+  <span class="hint">Clic = fait · Maj+clic = en cours · Alt+clic = passer · + = ajouter un bloc · × = supprimer</span>
   <button class="reset" id="reset">Réinitialiser</button>
 </div>
 
@@ -137,15 +151,26 @@ const KEY = "devops-roadmap-progress-v2";
 let progress = {};
 try { progress = JSON.parse(localStorage.getItem(KEY)) || {}; } catch {}
 
+// Les blocs ajoutés / supprimés sont gardés dans le navigateur.
+const BLOCKS_KEY = "devops-roadmap-blocks";
+let roadmap = JSON.parse(JSON.stringify(VIEWS.mine.roadmap));
+try { const saved = JSON.parse(localStorage.getItem(BLOCKS_KEY)); if (Array.isArray(saved)) roadmap = saved; } catch {}
+function saveBlocks() { try { localStorage.setItem(BLOCKS_KEY, JSON.stringify(roadmap)); } catch {} }
+
 const CHECK = '<svg viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 6.3l2.3 2.3 4.7-5"/></svg>';
 const sections = document.getElementById("sections");
 
-function makeNode(text, cls, badge) {
+function makeNode(text, cls, badge, sec, pos) {
   const el = document.createElement("div");
   el.className = "node " + cls;
   el.dataset.id = text.toLowerCase();
+  el.dataset.name = text;
+  el.dataset.sec = sec;
+  el.dataset.pos = pos;
   el.textContent = text;
   if (badge) el.insertAdjacentHTML("beforeend", `<span class="badge ${badge}">${CHECK}</span>`);
+  el.insertAdjacentHTML("beforeend", `<button class="add" title="Ajouter un bloc">+</button>`);
+  if (cls === "sub") el.insertAdjacentHTML("beforeend", `<button class="del" title="Supprimer ce bloc">×</button>`);
   return el;
 }
 
@@ -154,16 +179,16 @@ function render() {
   document.getElementById("title").textContent = v.title;
   document.getElementById("legend").innerHTML = v.legend.map(([c, t]) => `<div><span class="badge ${c}">${CHECK}</span>${t}</div>`).join("");
   sections.innerHTML = "";
-  v.roadmap.forEach(([topic, subs], i) => {
+  roadmap.forEach(([topic, subs], i) => {
     const sec = document.createElement("div");
     sec.className = "section " + (i % 2 ? "side-left" : "side-right");
     const topicCol = document.createElement("div");
     topicCol.className = "topic-col";
-    topicCol.appendChild(makeNode(topic, "topic"));
+    topicCol.appendChild(makeNode(topic, "topic", "", i, -1));
     const box = document.createElement("div");
     box.className = "subs";
     let group = null;
-    subs.forEach(s => {
+    subs.forEach((s, j) => {
       if (s.startsWith("#")) {
         group = document.createElement("div"); group.className = "group";
         if (s.length > 1) group.innerHTML = `<div class="group-label">${s.slice(1)}</div>`;
@@ -171,7 +196,7 @@ function render() {
         return;
       }
       const [name, badge] = s.split(":");
-      (group || box).appendChild(makeNode(name, "sub", badge));
+      (group || box).appendChild(makeNode(name, "sub", badge, i, j));
     });
     sec.append(box, topicCol);
     sections.appendChild(sec);
@@ -198,6 +223,25 @@ document.getElementById("map").addEventListener("click", e => {
   const n = e.target.closest(".node[data-id]");
   if (!n) return;
   e.preventDefault();
+
+  // + : ajoute un bloc (jaune -> à la fin de l'étape, orange -> juste après lui)
+  // × : supprime le bloc orange
+  if (e.target.closest(".add, .del")) {
+    const subs = roadmap[+n.dataset.sec][1];
+    if (e.target.closest(".add")) {
+      const name = (prompt("Nom du nouveau bloc :") || "").replace(/[:#]/g, " ").trim();
+      if (!name) return;
+      if (n.classList.contains("topic")) subs.push(name);
+      else subs.splice(+n.dataset.pos + 1, 0, name);
+    } else {
+      if (!confirm(`Supprimer « ${n.dataset.name} » ?`)) return;
+      subs.splice(+n.dataset.pos, 1);
+    }
+    saveBlocks();
+    render();
+    return;
+  }
+
   const want = e.shiftKey ? "learning" : e.altKey ? "skipped" : "done";
   if (progress[n.dataset.id] === want) delete progress[n.dataset.id];
   else progress[n.dataset.id] = want;
@@ -206,7 +250,13 @@ document.getElementById("map").addEventListener("click", e => {
 });
 
 document.getElementById("reset").onclick = () => {
-  if (confirm("Effacer toute ta progression ?")) { progress = {}; try { localStorage.removeItem(KEY); } catch {} paint(); }
+  if (!confirm("Effacer toute ta progression ?")) return;
+  progress = {}; try { localStorage.removeItem(KEY); } catch {}
+  if (confirm("Remettre aussi les blocs d'origine (supprime ceux que tu as ajoutés) ?")) {
+    roadmap = JSON.parse(JSON.stringify(VIEWS.mine.roadmap));
+    try { localStorage.removeItem(BLOCKS_KEY); } catch {}
+  }
+  render();
 };
 
 // ----- lignes bleues -----
